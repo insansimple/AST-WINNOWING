@@ -1,0 +1,4 @@
+/__pycache__
+/engine/__pycache__
+*.md
+*.log

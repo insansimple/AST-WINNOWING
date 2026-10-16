@@ -1,0 +1,18 @@
+{
+  "Computer": {
+    "TotalPhysicalMemory": 25612574720
+  },
+  "OS": {
+    "Caption": "Microsoft Windows 11 Pro",
+    "Version": "10.0.26200",
+    "OSArchitecture": "64-bit"
+  },
+  "CPU": [
+    {
+      "Name": "Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz",
+      "NumberOfCores": 4,
+      "NumberOfLogicalProcessors": 8
+    }
+  ],
+  "note": "Hardware of the recorded experiment host; update explicitly if reproducing on another host."
+}

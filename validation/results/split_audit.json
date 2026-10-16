@@ -1,0 +1,69 @@
+{
+  "seed": 20261016,
+  "tuning_group_fraction": 0.3,
+  "group_count": 30,
+  "tuning_groups": 9,
+  "test_groups": 21,
+  "method": "Connected components of positive pairs plus identical SHA-256. Single seeded shuffle in positive/control strata. No scores used to choose split.",
+  "provenance_limitation": "Lineage inferred from labels; independent author verification pending.",
+  "exact_file_overlap": 0,
+  "exact_content_overlap": 0,
+  "partitions": {
+    "tunning": {
+      "pairs": 95,
+      "labels": {
+        "1": 77,
+        "0": 18
+      },
+      "categories": {
+        "PLAG_L1_01": 6,
+        "PLAG_L1_02": 6,
+        "PLAG_L1_03": 6,
+        "PLAG_L1_04": 6,
+        "PLAG_L1_05": 6,
+        "PLAG_L1_06": 6,
+        "PLAG_L1_07": 5,
+        "PLAG_L2_01": 6,
+        "PLAG_L2_02": 6,
+        "PLAG_L2_03": 6,
+        "PLAG_L2_05": 6,
+        "PLAG_L3_01": 6,
+        "PLAG_L3_03": 6,
+        "NON_PLAG": 18
+      }
+    },
+    "test": {
+      "pairs": 274,
+      "labels": {
+        "1": 176,
+        "0": 98
+      },
+      "categories": {
+        "PLAG_L1_01": 14,
+        "PLAG_L1_02": 14,
+        "PLAG_L1_03": 14,
+        "PLAG_L1_04": 14,
+        "PLAG_L1_05": 14,
+        "PLAG_L1_06": 14,
+        "PLAG_L1_07": 8,
+        "PLAG_L2_01": 14,
+        "PLAG_L2_02": 14,
+        "PLAG_L2_03": 14,
+        "PLAG_L2_05": 14,
+        "PLAG_L3_01": 14,
+        "PLAG_L3_03": 14,
+        "NON_PLAG": 98
+      }
+    },
+    "excluded_cross_partition": {
+      "pairs": 84,
+      "labels": {
+        "0": 84
+      },
+      "categories": {
+        "NON_PLAG": 84
+      }
+    }
+  },
+  "master_sha256": "f5fd33e5900eeea809de0316e0f174dd4f2541743ad1cea470166b952faaa862"
+}

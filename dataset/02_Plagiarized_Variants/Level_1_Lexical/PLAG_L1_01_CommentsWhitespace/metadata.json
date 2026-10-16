@@ -1,0 +1,29 @@
+{
+  "id": "PLAG_L1_01",
+  "level": "Level_1_Lexical",
+  "technique": "CommentsWhitespace",
+  "description": "Type 1: Whitespace, Formatting, Indentation & Block/Line Comments Alteration (Lexical Layout Obfuscation)",
+  "total_files": 20,
+  "files": [
+    "01_FactorialCalculator.java",
+    "02_BubbleSort.java",
+    "03_LinearSearch.java",
+    "04_BinarySearch.java",
+    "05_MatrixAddition.java",
+    "06_MatrixMultiplication.java",
+    "07_SimpleStack.java",
+    "08_SimpleQueue.java",
+    "09_PrimeChecker.java",
+    "10_MaximumFinder.java",
+    "11_PalindromeChecker.java",
+    "12_FibonacciCalculator.java",
+    "13_StringReverser.java",
+    "14_WordCounter.java",
+    "15_GCDCalculator.java",
+    "16_LCMCalculator.java",
+    "17_TemperatureConverter.java",
+    "18_GeometryCalculator.java",
+    "19_KasirToko.java",
+    "20_BankQueue.java"
+  ]
+}

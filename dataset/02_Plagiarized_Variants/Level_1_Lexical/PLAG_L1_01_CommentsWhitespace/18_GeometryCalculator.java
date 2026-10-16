@@ -1,0 +1,150 @@
+/* =========================================================================
+ * Berkas      : GeometryCalculator.java
+ * Deskripsi   : Komputasi Metrik Geometri 2 Dimensi (Luas & Keliling)
+ * ========================================================================= */
+
+import java.util.Scanner;
+
+public class GeometryCalculator
+{
+    /* Konstanta rasio keliling lingkaran terhadap diameter */
+    static final double PI = 3.14159265358979;
+
+    /* Komputasi luas dan perimeter bangun persegi panjang */
+    public double calculateArea( double length, double width )
+    {
+        double area = length * width;
+        double perimeter = 2 * ( length + width );
+        System.out.println( "Perimeter: " + perimeter );
+        return area;
+    }
+
+    public double luasPersegi( double sisi )
+    {
+        return sisi * sisi;
+    }
+
+    public double kelilingPersegi( double sisi )
+    {
+        return 4 * sisi;
+    }
+
+    public double luasSegitiga( double alas, double tinggi )
+    {
+        return 0.5 * alas * tinggi;
+    }
+
+    public double kelilingSegitiga( double a, double b, double c )
+    {
+        return a + b + c;
+    }
+
+    /* Uji pertidaksamaan segitiga (triangle inequality theorem) */
+    public boolean segitigaValid( double a, double b, double c )
+    {
+        return ( ( a + b > c ) && ( a + c > b ) && ( b + c > a ) );
+    }
+
+    public double luasLingkaran( double jariJari )
+    {
+        return PI * jariJari * jariJari;
+    }
+
+    public double kelilingLingkaran( double jariJari )
+    {
+        return 2 * PI * jariJari;
+    }
+
+    /* Utilitas input desimal */
+    public static double bacaDesimal( Scanner input, String pesan )
+    {
+        System.out.print( pesan );
+        while ( !input.hasNextDouble() )
+        {
+            System.out.print( "Input harus berupa angka, ulangi: " );
+            input.next();
+        }
+        return input.nextDouble();
+    }
+
+    /* Validasi nilai desimal positif */
+    public static double bacaPositif( Scanner input, String pesan )
+    {
+        double nilai = 0;
+        while ( nilai <= 0 )
+        {
+            nilai = bacaDesimal( input, pesan );
+            if ( nilai <= 0 )
+            {
+                System.out.println( "Nilai harus lebih dari 0!" );
+            }
+        }
+        return nilai;
+    }
+
+    public static void main( String[] args )
+    {
+        Scanner input = new Scanner( System.in );
+        GeometryCalculator kalkulator = new GeometryCalculator();
+
+        int pilihan;
+        do
+        {
+            System.out.println( "\n===== PROGRAM BANGUN DATAR =====" );
+            System.out.println( "1. Persegi panjang" );
+            System.out.println( "2. Persegi" );
+            System.out.println( "3. Segitiga" );
+            System.out.println( "4. Lingkaran" );
+            System.out.println( "0. Keluar" );
+            pilihan = (int) bacaDesimal( input, "Pilih menu: " );
+
+            switch ( pilihan )
+            {
+                case 1:
+                    double panjang = bacaPositif( input, "Panjang : " );
+                    double lebar   = bacaPositif( input, "Lebar   : " );
+                    double luas1   = kalkulator.calculateArea( panjang, lebar );
+                    System.out.println( "Luas persegi panjang : " + luas1 );
+                    break;
+
+                case 2:
+                    double sisi = bacaPositif( input, "Panjang sisi : " );
+                    System.out.println( "Luas persegi    : " + kalkulator.luasPersegi( sisi ) );
+                    System.out.println( "Keliling persegi : " + kalkulator.kelilingPersegi( sisi ) );
+                    break;
+
+                case 3:
+                    double sisiA = bacaPositif( input, "Sisi A  : " );
+                    double sisiB = bacaPositif( input, "Sisi B  : " );
+                    double sisiC = bacaPositif( input, "Sisi C  : " );
+                    if ( kalkulator.segitigaValid( sisiA, sisiB, sisiC ) )
+                    {
+                        double alas   = bacaPositif( input, "Alas   : " );
+                        double tinggi = bacaPositif( input, "Tinggi : " );
+                        System.out.println( "Luas segitiga    : " + kalkulator.luasSegitiga( alas, tinggi ) );
+                        System.out.println( "Keliling segitiga : " + kalkulator.kelilingSegitiga( sisiA, sisiB, sisiC ) );
+                    }
+                    else
+                    {
+                        System.out.println( "Ketiga sisi tidak dapat membentuk segitiga!" );
+                    }
+                    break;
+
+                case 4:
+                    double r = bacaPositif( input, "Jari-jari : " );
+                    System.out.printf( "Luas lingkaran    : %.2f%n", kalkulator.luasLingkaran( r ) );
+                    System.out.printf( "Keliling lingkaran : %.2f%n", kalkulator.kelilingLingkaran( r ) );
+                    break;
+
+                case 0:
+                    System.out.println( "Terima kasih, program selesai." );
+                    break;
+
+                default:
+                    System.out.println( "Menu tidak tersedia!" );
+            }
+        } while ( pilihan != 0 );
+
+        input.close();
+    }
+}

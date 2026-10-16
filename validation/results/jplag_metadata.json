@@ -1,0 +1,72 @@
+{
+  "total_pairs": 274,
+  "evaluated_pairs": 274,
+  "unavailable_pairs": 0,
+  "metrics": {
+    "TP": 153,
+    "FP": 0,
+    "TN": 98,
+    "FN": 23,
+    "Accuracy": 91.60583941605839,
+    "Precision": 100.0,
+    "Recall": 86.93181818181819,
+    "F1": 93.00911854103343
+  },
+  "batch_wall_seconds": 25.64431820018217,
+  "timing_note": "Waktu seluruh batch, termasuk JVM, parsing dan ekspor; bukan waktu per pasangan.",
+  "run_information": {
+    "version": {
+      "major": 6,
+      "minor": 3,
+      "patch": 0
+    },
+    "failedSubmissions": [],
+    "dateOfExecution": "16/10/26",
+    "executionTime": 1465,
+    "totalComparisons": 19306
+  },
+  "options": {
+    "language": "java",
+    "minimumTokenMatch": 9,
+    "oldSubmissionDirectories": [],
+    "baseCodeSubmissionDirectory": null,
+    "subdirectoryName": null,
+    "fileSuffixes": [
+      ".java"
+    ],
+    "exclusionFileName": null,
+    "similarityMetric": "AVG",
+    "similarityThreshold": 0.0,
+    "maximumNumberOfComparisons": 0,
+    "clusteringOptions": {
+      "similarityMetric": "AVG",
+      "spectralKernelBandwidth": 20.0,
+      "spectralGaussianProcessVariance": 0.0025000000000000005,
+      "spectralMinRuns": 5,
+      "spectralMaxRuns": 50,
+      "spectralMaxKMeansIterationPerRun": 200,
+      "agglomerativeThreshold": 0.2,
+      "preprocessor": "CUMULATIVE_DISTRIBUTION_FUNCTION",
+      "enabled": false,
+      "algorithm": "SPECTRAL",
+      "agglomerativeInterClusterSimilarity": "AVERAGE",
+      "preprocessorThreshold": 0.2,
+      "preprocessorPercentile": 0.5
+    },
+    "debugParser": false,
+    "mergingOptions": {
+      "enabled": false,
+      "minimumNeighborLength": 2,
+      "maximumGapSize": 6,
+      "minimumRequiredMerges": 6
+    },
+    "normalize": false,
+    "analyzeComments": false,
+    "frequencyAnalysisOptions": {
+      "enabled": false,
+      "analysisStrategy": "COMPLETE_MATCHES_STRATEGY",
+      "weightingFunction": "SIGMOID_WEIGHTING",
+      "weightingFactor": 0.25
+    }
+  }
+}

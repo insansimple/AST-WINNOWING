@@ -1,0 +1,46 @@
+{
+  "recorded_utc": "2026-10-16T05:17:44.290113+00:00",
+  "hardware": {
+    "Computer": {
+      "TotalPhysicalMemory": 25612574720
+    },
+    "OS": {
+      "Caption": "Microsoft Windows 11 Pro",
+      "Version": "10.0.26200",
+      "OSArchitecture": "64-bit"
+    },
+    "CPU": [
+      {
+        "Name": "Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz",
+        "NumberOfCores": 4,
+        "NumberOfLogicalProcessors": 8
+      }
+    ],
+    "note": "Hardware of the recorded experiment host; update explicitly if reproducing on another host."
+  },
+  "software": {
+    "os": "Windows 11 (64bit)",
+    "os_version": "10.0.26200",
+    "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "python_implementation": "CPython",
+    "python_compiler": "MSC v.1943 64 bit (AMD64)",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 142 Stepping 10, GenuineIntel"
+  },
+  "timing_configuration": {
+    "timer": "time.perf_counter()",
+    "timer_resolution_seconds": 1e-07,
+    "timer_implementation": "QueryPerformanceCounter()",
+    "warmup_runs": 1,
+    "repeated_runs": 5
+  },
+  "algorithm_parameters": {
+    "k": 7,
+    "w": 8,
+    "lower_threshold": 0.15,
+    "upper_threshold": 0.7,
+    "ast_threshold": 0.65,
+    "weight_structural": 0.6,
+    "weight_subtree": 0.4
+  }
+}
