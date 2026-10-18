@@ -57,9 +57,9 @@ public class BubbleSort
         }
     }
 
-    public int getJumlahPerbandingan() { return this.jumlahPerbandingan; }
+    public int getJumlahPerbandingan() { return jumlahPerbandingan; }
 
-    public int getJumlahPertukaran() { return this.jumlahPertukaran; }
+    public int getJumlahPertukaran() { return jumlahPertukaran; }
 
     /* Utilitas mencetak elemen array ke konsol */
     public static void tampilkanArray(String judul, int[] data)

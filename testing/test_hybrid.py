@@ -16,7 +16,13 @@ DATASET_DIR = os.path.join(PUBLIKASI_DIR, "dataset")
 if ENGINE_DIR not in sys.path:
     sys.path.insert(0, ENGINE_DIR)
 
-from dataset_utils import read_label
+from dataset_utils import (
+    read_label,
+    get_category_desc,
+    print_confusion_matrix,
+    generate_confusion_matrix_md,
+    generate_metrics_table_md,
+)
 
 from hybrid_engine import StandaloneHybridEngine
 from winnowing_engine import StandaloneWinnowingEngine
@@ -43,8 +49,10 @@ WEIGHT_STRUCTURAL = float(CONFIG.get("weight_structural", StandaloneHybridEngine
 WEIGHT_SUBTREE = float(CONFIG.get("weight_subtree", StandaloneHybridEngine.DEFAULT_WEIGHT_SUBTREE))
 
 # Konfigurasi Path Berkas Dataset dan Output
+RESULTS_DIR = os.path.join(CURRENT_DIR, "results")
 DATASET_PATH = os.path.join(DATASET_DIR, "test.csv")
-OUTPUT_PATH = os.path.join(CURRENT_DIR, "test_hybrid.csv")
+OUTPUT_PATH = os.path.join(RESULTS_DIR, "hybrid.csv")
+OUTPUT_MD_PATH = os.path.join(RESULTS_DIR, "hybrid.md")
 # ==============================================================================
 
 
@@ -132,7 +140,9 @@ def evaluate_hybrid_effectiveness(
     weight_structural: float = WEIGHT_STRUCTURAL,
     weight_subtree: float = WEIGHT_SUBTREE,
     output_detail_csv: str = OUTPUT_PATH,
-    winnowing_threshold: float = WINNOWING_THRESHOLD
+    output_detail_md: str = OUTPUT_MD_PATH,
+    winnowing_threshold: float = WINNOWING_THRESHOLD,
+    performance_mode: bool = False
 ) -> Dict[str, Any]:
     print("=" * 95)
     print("   PENGUJIAN EFEKTIVITAS PIPELINE HYBRID (WINNOWING + AST ADAPTIF 3-ZONA)")
@@ -142,6 +152,8 @@ def evaluate_hybrid_effectiveness(
     print(f"   Bobot Verifikasi AST: {weight_structural*100:.0f}% Structural + {weight_subtree*100:.0f}% Subtree Fingerprint")
     print(f"   Threshold baseline Winnowing: {winnowing_threshold:.2f}")
     print(f"   Dataset: {dataset_path}")
+    if performance_mode:
+        print("   Mode Operasi: PERFORMANCE (Pencatatan hasil & ekspor CSV dinonaktifkan)")
     print("=" * 95)
 
     dataset = load_dataset(dataset_path)
@@ -159,6 +171,33 @@ def evaluate_hybrid_effectiveness(
         weight_structural=weight_structural,
         weight_subtree=weight_subtree
     )
+
+    if performance_mode:
+        start_all = time.perf_counter()
+        for item in dataset:
+            hybrid_engine.detect(
+                item["code1"], item["code2"],
+                winnowing_lower_threshold=lower_threshold,
+                winnowing_upper_threshold=upper_threshold,
+                ast_threshold=ast_threshold,
+                weight_structural=weight_structural,
+                weight_subtree=weight_subtree
+            )
+        total_time = (time.perf_counter() - start_all) * 1000.0
+        avg_time = (total_time / total_samples) if total_samples > 0 else 0.0
+
+        print(f"\n[PERFORMANCE MODE SELESAI]")
+        print(f"Total Pasangan Diuji : {total_samples}")
+        print(f"Total Waktu Pipeline : {total_time:.2f} ms")
+        print(f"Rata-rata Waktu      : {avg_time:.3f} ms / pasangan kode")
+        print("=" * 95)
+
+        return {
+            "metrics_winn": {},
+            "metrics_ast": {},
+            "metrics_hybrid": {},
+            "details": []
+        }
 
     details = []
 
@@ -361,14 +400,15 @@ def evaluate_hybrid_effectiveness(
         acc = (tp + tn) / (tp + fp + tn + fn) * 100.0 if (tp + fp + tn + fn) > 0 else 0.0
         prec = tp / (tp + fp) * 100.0 if (tp + fp) > 0 else 0.0
         rec = tp / (tp + fn) * 100.0 if (tp + fn) > 0 else 0.0
+        spec = tn / (tn + fp) * 100.0 if (tn + fp) > 0 else 0.0
         f1 = (2 * prec * rec) / (prec + rec) if (prec + rec) > 0 else 0.0
-        return {"Accuracy": acc, "Precision": prec, "Recall": rec, "F1": f1, "TP": tp, "FP": fp, "TN": tn, "FN": fn}
+        return {"Accuracy": acc, "Precision": prec, "Recall": rec, "Specificity": spec, "F1": f1, "TP": tp, "FP": fp, "TN": tn, "FN": fn}
 
     metrics_winn = calc_metrics(cm_winn)
     metrics_ast = calc_metrics(cm_ast)
     metrics_hybrid = calc_metrics(cm_hybrid)
 
-    # Cetak Ringkasan
+    # Cetak Ringkasan Perbandingan
     print("\n" + "=" * 95)
     print("   RINGKASAN HASIL EVALUASI KOMPARASI TIGA ENGINE:")
     print("=" * 95)
@@ -377,12 +417,30 @@ def evaluate_hybrid_effectiveness(
     print(f"{'Akurasi (%)':<25} | {metrics_winn['Accuracy']:>15.2f}% | {metrics_ast['Accuracy']:>15.2f}% | {metrics_hybrid['Accuracy']:>15.2f}%")
     print(f"{'Presisi (%)':<25} | {metrics_winn['Precision']:>15.2f}% | {metrics_ast['Precision']:>15.2f}% | {metrics_hybrid['Precision']:>15.2f}%")
     print(f"{'Recall (%)':<25} | {metrics_winn['Recall']:>15.2f}% | {metrics_ast['Recall']:>15.2f}% | {metrics_hybrid['Recall']:>15.2f}%")
+    print(f"{'Spesifisitas (%)':<25} | {metrics_winn['Specificity']:>15.2f}% | {metrics_ast['Specificity']:>15.2f}% | {metrics_hybrid['Specificity']:>15.2f}%")
     print(f"{'F1-Score (%)':<25} | {metrics_winn['F1']:>15.2f}% | {metrics_ast['F1']:>15.2f}% | {metrics_hybrid['F1']:>15.2f}%")
     print(f"{'Rata-rata Waktu (ms)':<25} | {avg_t_winn:>15.3f}   | {avg_t_ast:>15.3f}   | {avg_t_hybrid:>15.3f}  ")
     print(f"{'Efisiensi vs AST':<25} | {'-':>18} | {'Basis (1.00x)':>18} | {f'{overall_time_savings_pct:.1f}% ({global_speedup:.2f}x)':>18}")
     print("=" * 85)
 
-    # Simpan CSV Detail
+    # Cetak Confusion Matrix Pipeline Hybrid
+    print_confusion_matrix(metrics_hybrid, engine_name="Pipeline Hybrid (Adaptive 3-Zone)")
+
+    # Cetak Tabel Perbandingan Confusion Matrix 3 Engine
+    print("\n" + "=" * 95)
+    print("   KOMPARASI CONFUSION MATRIX LENGKAP KETIGA METODE:")
+    print("=" * 95)
+    print(f"{'Metode / Engine':<25} | {'TP':<6} | {'FP':<6} | {'TN':<6} | {'FN':<6} | {'Akurasi':<10} | {'F1-Score':<10}")
+    print("-" * 85)
+    print(f"{'Winnowing Saja':<25} | {metrics_winn['TP']:<6} | {metrics_winn['FP']:<6} | {metrics_winn['TN']:<6} | {metrics_winn['FN']:<6} | {metrics_winn['Accuracy']:>8.2f}% | {metrics_winn['F1']:>8.2f}%")
+    print(f"{'AST Saja':<25} | {metrics_ast['TP']:<6} | {metrics_ast['FP']:<6} | {metrics_ast['TN']:<6} | {metrics_ast['FN']:<6} | {metrics_ast['Accuracy']:>8.2f}% | {metrics_ast['F1']:>8.2f}%")
+    print(f"{'Hybrid Pipeline':<25} | {metrics_hybrid['TP']:<6} | {metrics_hybrid['FP']:<6} | {metrics_hybrid['TN']:<6} | {metrics_hybrid['FN']:<6} | {metrics_hybrid['Accuracy']:>8.2f}% | {metrics_hybrid['F1']:>8.2f}%")
+    print("=" * 85)
+
+    total_rescued = sum(1 for d in details if d["fn_rescued_by_hybrid"])
+    print(f"Total Kasus Plagiat Diselamatkan Hybrid (FN Winnowing -> TP Hybrid): {total_rescued} pasangan kode")
+
+    # Simpan berkas CSV Detail
     if output_detail_csv:
         fieldnames = [
             "id", "kode_plag", "deskripsi", "actual_label",
@@ -399,6 +457,80 @@ def evaluate_hybrid_effectiveness(
             writer.writeheader()
             writer.writerows(details)
         print(f"\n[OK] CSV Hasil Pengujian Hybrid disimpan ke: {output_detail_csv}")
+
+    # Simpan laporan Confusion Matrix & Evaluasi ke Markdown
+    if output_detail_md:
+        os.makedirs(os.path.dirname(os.path.abspath(output_detail_md)), exist_ok=True)
+        md_lines = [
+            "# Evaluasi Deteksi Plagiarisme Java: Pipeline Hybrid (Winnowing + AST Adaptif 3-Zona)\n",
+            "Laporan pengujian kinerja komparatif dan efektivitas deteksi kemiripan kode menggunakan **Pipeline Hybrid Adaptif 3-Zona** yang menggabungkan kecepatan *Winnowing* (*Fast-Exit*) dengan akurasi semantik *Java AST* (*Tree Normalization & Subtree Fingerprints*).\n",
+            "## 1. Parameter & Konfigurasi Pengujian\n",
+            "| Parameter | Nilai | Deskripsi / Peran |",
+            "| :--- | :--- | :--- |",
+            f"| **Dataset Pengujian** | `{os.path.basename(dataset_path)}` | Dataset uji pasangan source code Java |",
+            f"| **Jumlah Pasangan Kode** | `{total_samples}` pasangan | Total pasangan kode yang diuji |",
+            f"| **Parameter Winnowing** | `k={k}, w={w}` | $k$-gram = {k}, window size = {w} |",
+            f"| **Ambang Batas Bawah (Fast-Exit)** | `similarity <= {lower_threshold:.2f}` (`{lower_threshold*100:.0f}%`) | Keputusan instan Non-Plagiat tanpa verifikasi AST |",
+            f"| **Ambang Batas Atas (Fast-Exit)** | `similarity >= {upper_threshold:.2f}` (`{upper_threshold*100:.0f}%`) | Keputusan instan Plagiat tanpa verifikasi AST |",
+            f"| **Ambang Batas Verifikasi AST** | `ast_threshold = {ast_threshold:.2f}` (`{ast_threshold*100:.0f}%`) | Ambang keputusan verifikasi AST di Zona Abu-abu |",
+            f"| **Bobot Verifikasi AST** | `{weight_structural*100:.0f}%` Structural + `{weight_subtree*100:.0f}%` Subtree | Pembobotan representasi pohon AST |",
+            f"| **Baseline Threshold Winnowing** | `threshold = {winnowing_threshold:.2f}` | Ambang batas acuan untuk Winnowing murni |\n",
+            "## 2. Confusion Matrix\n",
+            "### 2.1 Confusion Matrix Pipeline Hybrid\n",
+            generate_confusion_matrix_md(metrics_hybrid),
+            "\n### 2.2 Perbandingan Confusion Matrix Tiga Metode\n",
+            "| Metode / Engine | True Positive (TP) | False Positive (FP) | True Negative (TN) | False Negative (FN) | Total Sampel |",
+            "| :--- | :---: | :---: | :---: | :---: | :---: |",
+            f"| **Winnowing Saja** | {metrics_winn['TP']} | {metrics_winn['FP']} | {metrics_winn['TN']} | {metrics_winn['FN']} | {total_samples} |",
+            f"| **AST Saja** | {metrics_ast['TP']} | {metrics_ast['FP']} | {metrics_ast['TN']} | {metrics_ast['FN']} | {total_samples} |",
+            f"| **Hybrid Pipeline** | **{metrics_hybrid['TP']}** | **{metrics_hybrid['FP']}** | **{metrics_hybrid['TN']}** | **{metrics_hybrid['FN']}** | **{total_samples}** |\n",
+            "## 3. Komparasi Metrik Evaluasi Klasifikasi\n",
+            "| Metrik Evaluasi | Winnowing Saja | AST Saja | Hybrid Pipeline | Catatan & Analisis |",
+            "| :--- | :---: | :---: | :---: | :--- |",
+            f"| **Akurasi (Accuracy)** | {metrics_winn['Accuracy']:.2f}% | {metrics_ast['Accuracy']:.2f}% | **{metrics_hybrid['Accuracy']:.2f}%** | Proporsi keputusan deteksi benar |",
+            f"| **Presisi (Precision)** | {metrics_winn['Precision']:.2f}% | {metrics_ast['Precision']:.2f}% | **{metrics_hybrid['Precision']:.2f}%** | Ketepatan deteksi positif |",
+            f"| **Recall (Sensitivity)** | {metrics_winn['Recall']:.2f}% | {metrics_ast['Recall']:.2f}% | **{metrics_hybrid['Recall']:.2f}%** | Daya tangkap kasus plagiat |",
+            f"| **Spesifisitas (Specificity)** | {metrics_winn['Specificity']:.2f}% | {metrics_ast['Specificity']:.2f}% | **{metrics_hybrid['Specificity']:.2f}%** | Ketepatan identifikasi non-plagiat |",
+            f"| **F1-Score** | {metrics_winn['F1']:.2f}% | {metrics_ast['F1']:.2f}% | **{metrics_hybrid['F1']:.2f}%** | Rata-rata harmonik Presisi & Recall |\n",
+            "## 4. Analisis Efisiensi Waktu & Distribusi Zona Adaptif 3-Zona\n",
+            "### 4.1 Distribusi Pasangan Kode pada Zona Keputusan\n",
+            "| Zona Keputusan | Range Ambang Batas | Jumlah Pasangan | Rasio Pasangan (%) | Panggilan Verifikasi AST |",
+            "| :--- | :--- | :---: | :---: | :---: |",
+            f"| **Low Fast-Exit** | $Sim \\le {lower_threshold*100:.0f}\\%$ | {zone_stats[z_low_key]['count']} | {zone_stats[z_low_key]['count']/total_samples*100:.2f}% | Tidak (0) |",
+            f"| **Grey Zone (Zona Abu-abu)** | ${lower_threshold*100:.0f}\\% < Sim < {upper_threshold*100:.0f}\\%$ | {zone_stats[z_grey_key]['count']} | {zone_stats[z_grey_key]['count']/total_samples*100:.2f}% | **Ya ({zone_stats[z_grey_key]['count']})** |",
+            f"| **High Fast-Exit** | $Sim \\ge {upper_threshold*100:.0f}\\%$ | {zone_stats[z_high_key]['count']} | {zone_stats[z_high_key]['count']/total_samples*100:.2f}% | Tidak (0) |\n",
+            "### 4.2 Ringkasan Waktu & Percepatan (Speedup)\n",
+            "| Parameter Kinerja | Nilai |",
+            "| :--- | :--- |",
+            f"| **Rata-rata Waktu Winnowing Saja** | {avg_t_winn:.3f} ms / pasangan |",
+            f"| **Rata-rata Waktu AST Saja** | {avg_t_ast:.3f} ms / pasangan |",
+            f"| **Rata-rata Waktu Pipeline Hybrid** | **{avg_t_hybrid:.3f} ms / pasangan** |",
+            f"| **Penghematan Waktu vs AST Saja** | **{overall_time_savings_pct:.1f}%** ({total_time_saved_sec:.2f} detik lebih cepat) |",
+            f"| **Rasio Percepatan (Speedup)** | **{global_speedup:.2f}x** lebih cepat dari AST murni |\n",
+            "## 5. Analisis Kasus Penyelamatan (Rescued Cases)\n",
+            f"Terdapat **{total_rescued} kasus plagiarisme** yang gagal terdeteksi oleh Winnowing murni (*False Negative* karena modifikasi struktural/renaming) namun **berhasil diselamatkan dan diklasifikasikan dengan benar oleh Pipeline Hybrid** melalui verifikasi AST di Zona Abu-abu.\n",
+            "## 6. Breakdown Performa per Kategori Plagiarisme\n",
+            "| Kode Plag | Deskripsi Kategori | Jumlah | Sim Winn (%) | Sim AST (%) | Sim Hybrid (%) | Panggilan AST | Kasus Diselamatkan |",
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |"
+        ]
+        for k_code, cat in sorted(categories.items()):
+            n = cat["count"]
+            w_avg = (sum(cat["sims_winn"]) / n) * 100.0 if n > 0 else 0.0
+            a_avg = (sum(cat["sims_ast"]) / n) * 100.0 if n > 0 else 0.0
+            h_avg = (sum(cat["sims_hyb"]) / n) * 100.0 if n > 0 else 0.0
+            desc = get_category_desc(k_code)
+            ast_calls = cat["ast_calls"]
+            rescued = cat["rescued_count"]
+            md_lines.append(f"| `{k_code}` | {desc} | {n} | {w_avg:.2f}% | {a_avg:.2f}% | {h_avg:.2f}% | {ast_calls} | {rescued} |")
+
+        csv_rel_name = os.path.basename(output_detail_csv) if output_detail_csv else "hybrid.csv"
+        md_lines.extend([
+            "\n## 7. Berkas Luaran Terkait\n",
+            f"- Berkas CSV Hasil Detail: [`{csv_rel_name}`]({csv_rel_name})\n"
+        ])
+        with open(output_detail_md, mode="w", encoding="utf-8") as f:
+            f.write("\n".join(md_lines))
+        print(f"[OK] Laporan Confusion Matrix & Evaluasi Hybrid disimpan ke: {output_detail_md}")
 
     return {
         "metrics_winn": metrics_winn,
@@ -432,6 +564,10 @@ if __name__ == "__main__":
                         help=f"Path file dataset CSV (default: {DATASET_PATH})")
     parser.add_argument("--output", "-o", type=str, default=OUTPUT_PATH,
                         help=f"Path output CSV detail per pasangan (default: {OUTPUT_PATH})")
+    parser.add_argument("--output-md", "-m", type=str, default=OUTPUT_MD_PATH,
+                        help=f"Path output Markdown laporan (default: {OUTPUT_MD_PATH})")
+    parser.add_argument("--performance", "-performance", "-p", action="store_true",
+                        help="Mode pengujian performa murni: hanya melakukan cek similaritas pipeline hybrid tanpa menyimpan hasil (details.append dan ekspor CSV dinonaktifkan)")
 
     args = parser.parse_args()
 
@@ -445,5 +581,7 @@ if __name__ == "__main__":
         weight_structural=args.w_struct,
         weight_subtree=args.w_fp,
         winnowing_threshold=args.winnowing_threshold,
-        output_detail_csv=args.output
+        output_detail_csv=args.output,
+        output_detail_md=args.output_md,
+        performance_mode=args.performance
     )

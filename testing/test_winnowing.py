@@ -16,7 +16,14 @@ DATASET_DIR = os.path.join(PUBLIKASI_DIR, "dataset")
 if ENGINE_DIR not in sys.path:
     sys.path.insert(0, ENGINE_DIR)
 
-from dataset_utils import read_label, classification_metrics
+from dataset_utils import (
+    read_label,
+    classification_metrics,
+    get_category_desc,
+    print_confusion_matrix,
+    generate_confusion_matrix_md,
+    generate_metrics_table_md,
+)
 
 from winnowing_engine import StandaloneWinnowingEngine
 
@@ -35,8 +42,10 @@ W = int(CONFIG.get("w", StandaloneWinnowingEngine.DEFAULT_W))
 FILTER_KODE_PLAG = "ALL"            # Filter pengujian: "ALL" untuk seluruh sampel, atau pola (misal: "PLAG_L1*")
 
 # Konfigurasi Path Berkas Dataset dan Output
+RESULTS_DIR = os.path.join(CURRENT_DIR, "results")
 DATASET_PATH = os.path.join(DATASET_DIR, "test.csv")
-OUTPUT_PATH = os.path.join(CURRENT_DIR, "test_winn_rest.csv")
+OUTPUT_PATH = os.path.join(RESULTS_DIR, "winnowing.csv")
+OUTPUT_MD_PATH = os.path.join(RESULTS_DIR, "winnowing.md")
 # ==============================================================================
 
 
@@ -102,19 +111,51 @@ def evaluate_winnowing(
     k: int = K,
     w: int = W,
     output_result_csv: str = OUTPUT_PATH,
+    output_result_md: str = OUTPUT_MD_PATH,
     kode_plag_filter: str = FILTER_KODE_PLAG,
-    threshold: float = THRESHOLD
+    threshold: float = THRESHOLD,
+    performance_mode: bool = False
 ) -> Dict[str, Any]:
+    guarantee_t = w + k - 1
     print("=" * 75)
     print("  UJICOBA DETEKSI PLAGIARISME JAVA: ENGINE WINNOWING")
     print(f"  Dataset: {dataset_path}")
-    print(f"  Parameter: k-gram = {k}, window size (w) = {w}, threshold = {threshold:.2f}")
+    print(f"  Parameter: k-gram = {k}, window size (w) = {w}, guarantee (t) = {guarantee_t}, threshold = {threshold:.2f}")
     if kode_plag_filter and kode_plag_filter.upper() != "ALL":
         print(f"  Filter Kode Plag: {kode_plag_filter}")
+    if performance_mode:
+        print("  Mode Operasi    : PERFORMANCE (Pencatatan hasil & ekspor CSV dinonaktifkan)")
     print("=" * 75)
 
     dataset = load_dataset(dataset_path, kode_plag_filter=kode_plag_filter)
     engine = StandaloneWinnowingEngine(k=k, w=w)
+
+    if performance_mode:
+        start_all = time.perf_counter()
+        for item in dataset:
+            engine.detect(item["code1"], item["code2"], threshold=threshold)
+        total_time = (time.perf_counter() - start_all) * 1000.0
+
+        total_samples = len(dataset)
+        avg_time = (total_time / total_samples) if total_samples > 0 else 0.0
+
+        print(f"\n[PERFORMANCE MODE SELESAI]")
+        print(f"Total Pasangan Diuji : {total_samples}")
+        print(f"Total Waktu Cek      : {total_time:.2f} ms")
+        print(f"Rata-rata Waktu      : {avg_time:.3f} ms / pasangan kode")
+        print("=" * 75)
+
+        return {
+            "engine": "Winnowing",
+            "total_samples": total_samples,
+            "avg_similarity_percent": 0.0,
+            "min_similarity_percent": 0.0,
+            "max_similarity_percent": 0.0,
+            "avg_time_ms": avg_time,
+            "breakdown": {},
+            "metrics": {},
+            "details": []
+        }
 
     results = []
     total_time = 0.0
@@ -149,7 +190,6 @@ def evaluate_winnowing(
         print(f"{item['id']:<8} | {item.get('kode_plag', ''):<15} | {sim_pct:>13.2f}% | {elapsed_ms:>9.2f} ms")
 
     metrics = classification_metrics(results)
-    print(f"Metrik klasifikasi (%): {metrics}")
     total_samples = len(dataset)
     sim_values = [r["similarity"] * 100.0 for r in results]
     avg_sim = (sum(sim_values) / total_samples) if total_samples > 0 else 0.0
@@ -164,7 +204,11 @@ def evaluate_winnowing(
     print(f"Kemiripan Terendah    : {min_sim:.2f}%")
     print(f"Kemiripan Tertinggi   : {max_sim:.2f}%")
     print(f"Rata-rata Waktu       : {avg_time:.3f} ms / pasangan kode")
+    print(f"Total Waktu Komputasi : {total_time:.2f} ms ({total_time / 1000.0:.2f} s)")
     print("=" * 60)
+
+    # Cetak Confusion Matrix & Metrik Evaluasi di Konsol
+    print_confusion_matrix(metrics, engine_name="Winnowing")
 
     # Breakdown per kode_plag
     breakdown = {}
@@ -187,8 +231,9 @@ def evaluate_winnowing(
             print(f"{k_code:<15} | {tot:<6} | {avg_sim_k:>17.2f}% | {avg_t_k:>19.2f} ms")
         print("=" * 72)
 
-    # Simpan hasil detail ke CSV
+    # Simpan berkas CSV
     if output_result_csv:
+        os.makedirs(os.path.dirname(os.path.abspath(output_result_csv)), exist_ok=True)
         fieldnames = [
             "id", "kode_plag", "description", "actual_label", "predicted_label", "threshold", "similarity", "similarity_percentage",
             "execution_time_ms", "shared_fp", "fp_count_1", "fp_count_2"
@@ -198,7 +243,50 @@ def evaluate_winnowing(
             writer.writeheader()
             for r in results:
                 writer.writerow(r)
-        print(f"\n[OK] Hasil detail kemiripan disimpan ke: {output_result_csv}")
+        print(f"\n[OK] Hasil detail CSV disimpan ke: {output_result_csv}")
+
+    # Simpan laporan Confusion Matrix & Evaluasi ke Markdown
+    if output_result_md:
+        os.makedirs(os.path.dirname(os.path.abspath(output_result_md)), exist_ok=True)
+        md_lines = [
+            "# Evaluasi Deteksi Plagiarisme Java: Engine Winnowing\n",
+            "Laporan pengujian kinerja dan akurasi deteksi kemiripan kode menggunakan **Standalone Winnowing Engine** berbasis *Rolling Hash* dan *Local Fingerprint Selection*.\n",
+            "## 1. Parameter & Konfigurasi Pengujian\n",
+            "| Parameter | Nilai |",
+            "| :--- | :--- |",
+            f"| **Dataset Pengujian** | `{os.path.basename(dataset_path)}` |",
+            f"| **Jumlah Pasangan Kode** | `{total_samples}` pasangan |",
+            f"| **Ambang Batas (Threshold)** | `{threshold:.2f}` (`{threshold*100:.0f}%`) |",
+            f"| **Ukuran k-gram (k)** | `{k}` karakter |",
+            f"| **Ukuran Window (w)** | `{w}` |",
+            f"| **Guarantee Threshold (t)** | `{guarantee_t}` karakter (`w + k - 1`) |",
+            f"| **Rata-rata Kemiripan** | `{avg_sim:.2f}%` |",
+            f"| **Kemiripan Terendah / Tertinggi** | `{min_sim:.2f}%` / `{max_sim:.2f}%` |",
+            f"| **Rata-rata Waktu Eksekusi** | `{avg_time:.3f} ms / pasangan` |",
+            f"| **Total Waktu Pengujian** | `{total_time:.2f} ms ({total_time / 1000.0:.2f} s)` |\n",
+            "## 2. Confusion Matrix\n",
+            generate_confusion_matrix_md(metrics),
+            "\n## 3. Metrik Evaluasi Klasifikasi\n",
+            generate_metrics_table_md(metrics),
+            "\n## 4. Breakdown Performa per Kategori Plagiarisme\n",
+            "| Kode Plag | Deskripsi Kategori | Total Pasangan | Rata-rata Kemiripan (%) | Rata-rata Waktu (ms) |",
+            "| :--- | :--- | :---: | :---: | :---: |"
+        ]
+        for k_code, stats in sorted(breakdown.items()):
+            tot = stats["total"]
+            avg_sim_k = (sum(stats["sims"]) / tot) if tot > 0 else 0.0
+            avg_t_k = sum(stats["times"]) / tot if tot > 0 else 0.0
+            desc = get_category_desc(k_code)
+            md_lines.append(f"| `{k_code}` | {desc} | {tot} | {avg_sim_k:.2f}% | {avg_t_k:.2f} ms |")
+
+        csv_rel_name = os.path.basename(output_result_csv) if output_result_csv else "winnowing.csv"
+        md_lines.extend([
+            "\n## 5. Berkas Luaran Terkait\n",
+            f"- Berkas CSV Hasil Detail: [`{csv_rel_name}`]({csv_rel_name})\n"
+        ])
+        with open(output_result_md, mode="w", encoding="utf-8") as f:
+            f.write("\n".join(md_lines))
+        print(f"[OK] Laporan Confusion Matrix & Evaluasi disimpan ke: {output_result_md}")
 
     return {
         "engine": "Winnowing",
@@ -227,6 +315,10 @@ if __name__ == "__main__":
                         help=f"Path ke file dataset CSV uji (default: {DATASET_PATH})")
     parser.add_argument("--output", "-o", type=str, default=OUTPUT_PATH,
                         help=f"Path output file CSV (default: {OUTPUT_PATH})")
+    parser.add_argument("--output-md", "-m", type=str, default=OUTPUT_MD_PATH,
+                        help=f"Path output file Markdown laporan (default: {OUTPUT_MD_PATH})")
+    parser.add_argument("--performance", "-performance", "-p", action="store_true",
+                        help="Mode pengujian performa murni: hanya melakukan cek similaritas tanpa menyimpan hasil (results.append dan ekspor CSV dinonaktifkan)")
 
     args = parser.parse_args()
 
@@ -236,5 +328,7 @@ if __name__ == "__main__":
         k=args.k,
         w=args.w,
         output_result_csv=args.output,
-        kode_plag_filter=args.filter
+        output_result_md=args.output_md,
+        kode_plag_filter=args.filter,
+        performance_mode=args.performance
     )

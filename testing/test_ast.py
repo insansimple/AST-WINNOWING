@@ -16,7 +16,14 @@ DATASET_DIR = os.path.join(PUBLIKASI_DIR, "dataset")
 if ENGINE_DIR not in sys.path:
     sys.path.insert(0, ENGINE_DIR)
 
-from dataset_utils import read_label, classification_metrics
+from dataset_utils import (
+    read_label,
+    classification_metrics,
+    get_category_desc,
+    print_confusion_matrix,
+    generate_confusion_matrix_md,
+    generate_metrics_table_md,
+)
 
 from java_ast_engine import StandaloneJavaASTEngine
 
@@ -35,8 +42,10 @@ WEIGHT_SUBTREE = float(CONFIG.get("weight_subtree", StandaloneJavaASTEngine.DEFA
 FILTER_KODE_PLAG = "ALL"            # Filter pengujian: "ALL" untuk seluruh sampel, atau pola (misal: "PLAG_L1*")
 
 # Konfigurasi Path Berkas Dataset dan Output
+RESULTS_DIR = os.path.join(CURRENT_DIR, "results")
 DATASET_PATH = os.path.join(DATASET_DIR, "test.csv")
-OUTPUT_PATH = os.path.join(CURRENT_DIR, "test_ast_res.csv")
+OUTPUT_PATH = os.path.join(RESULTS_DIR, "ast.csv")
+OUTPUT_MD_PATH = os.path.join(RESULTS_DIR, "ast.md")
 # ==============================================================================
 
 
@@ -101,7 +110,9 @@ def evaluate_ast(
     weight_structural: float = WEIGHT_STRUCTURAL,
     weight_subtree: float = WEIGHT_SUBTREE,
     output_result_csv: str = OUTPUT_PATH,
-    kode_plag_filter: str = FILTER_KODE_PLAG
+    output_result_md: str = OUTPUT_MD_PATH,
+    kode_plag_filter: str = FILTER_KODE_PLAG,
+    performance_mode: bool = False
 ) -> Dict[str, Any]:
     print("=" * 75)
     print("  UJICOBA DETEKSI PLAGIARISME JAVA: ENGINE AST SAJA")
@@ -110,10 +121,37 @@ def evaluate_ast(
     print(f"  Komposisi Bobot  : {weight_structural*100:.0f}% Structural + {weight_subtree*100:.0f}% Subtree Fingerprint")
     if kode_plag_filter and kode_plag_filter.upper() != "ALL":
         print(f"  Filter Kode Plag : {kode_plag_filter}")
+    if performance_mode:
+        print("  Mode Operasi     : PERFORMANCE (Pencatatan hasil & ekspor CSV dinonaktifkan)")
     print("=" * 75)
 
     dataset = load_dataset(dataset_path, kode_plag_filter=kode_plag_filter)
     engine = StandaloneJavaASTEngine(weight_structural=weight_structural, weight_subtree=weight_subtree)
+
+    if performance_mode:
+        start_all = time.perf_counter()
+        for item in dataset:
+            engine.detect(item["code1"], item["code2"], threshold=threshold)
+        total_time = (time.perf_counter() - start_all) * 1000.0
+
+        total_samples = len(dataset)
+        avg_time = (total_time / total_samples) if total_samples > 0 else 0.0
+
+        print(f"\n[PERFORMANCE MODE SELESAI]")
+        print(f"Total Pasangan Diuji : {total_samples}")
+        print(f"Total Waktu Cek      : {total_time:.2f} ms")
+        print(f"Rata-rata Waktu      : {avg_time:.3f} ms / pasangan kode")
+        print("=" * 75)
+
+        return {
+            "engine": "AST",
+            "total_samples": total_samples,
+            "avg_similarity": 0.0,
+            "avg_time_ms": avg_time,
+            "breakdown": {},
+            "metrics": {},
+            "details": []
+        }
 
     results = []
     total_time = 0.0
@@ -151,17 +189,20 @@ def evaluate_ast(
         print(f"{item['id']:<12} | {actual:<6} | {sim*100:>6.2f}% | {elapsed_ms:>8.2f} ms")
 
     metrics = classification_metrics(results)
-    print(f"Metrik klasifikasi (%): {metrics}")
     total_samples = len(dataset)
     avg_sim = (sum(r["similarity"] for r in results) / total_samples) if total_samples > 0 else 0.0
     avg_time = total_time / total_samples if total_samples > 0 else 0.0
 
     print("-" * 60)
     print("HASIL EVALUASI (RATA-RATA):")
-    print(f"Total Sampel       : {total_samples}")
-    print(f"Rata-rata Kemiripan: {avg_sim * 100:.2f}%")
-    print(f"Rata-rata Waktu    : {avg_time:.3f} ms / pasangan kode")
+    print(f"Total Sampel         : {total_samples}")
+    print(f"Rata-rata Kemiripan  : {avg_sim * 100:.2f}%")
+    print(f"Rata-rata Waktu      : {avg_time:.3f} ms / pasangan kode")
+    print(f"Total Waktu Komputasi: {total_time:.2f} ms ({total_time / 1000.0:.2f} s)")
     print("=" * 60)
+
+    # Cetak Confusion Matrix & Metrik Evaluasi di Konsol
+    print_confusion_matrix(metrics, engine_name="Java AST")
 
     # Breakdown per kode_plag
     breakdown = {}
@@ -184,7 +225,9 @@ def evaluate_ast(
             print(f"{k:<15} | {tot:<6} | {avg_sim_k:>10.2f}% | {avg_t_k:>10.2f} ms")
         print("=" * 55)
 
+    # Simpan berkas CSV
     if output_result_csv:
+        os.makedirs(os.path.dirname(os.path.abspath(output_result_csv)), exist_ok=True)
         fieldnames = [
             "id", "kode_plag", "description", "actual_label", "predicted_label", "threshold", "similarity",
             "structural_sim", "fingerprint_sim",
@@ -195,7 +238,48 @@ def evaluate_ast(
             writer.writeheader()
             for r in results:
                 writer.writerow(r)
-        print(f"[OK] Hasil detail disimpan ke: {output_result_csv}")
+        print(f"\n[OK] Hasil detail CSV disimpan ke: {output_result_csv}")
+
+    # Simpan laporan Confusion Matrix & Evaluasi ke Markdown
+    if output_result_md:
+        os.makedirs(os.path.dirname(os.path.abspath(output_result_md)), exist_ok=True)
+        md_lines = [
+            "# Evaluasi Deteksi Plagiarisme Java: Engine AST\n",
+            "Laporan pengujian kinerja dan akurasi deteksi kemiripan kode menggunakan **Standalone Java AST Engine** (Tree Normalization + Subtree Fingerprints).\n",
+            "## 1. Parameter & Konfigurasi Pengujian\n",
+            "| Parameter | Nilai |",
+            "| :--- | :--- |",
+            f"| **Dataset Pengujian** | `{os.path.basename(dataset_path)}` |",
+            f"| **Jumlah Pasangan Kode** | `{total_samples}` pasangan |",
+            f"| **Ambang Batas (Threshold)** | `{threshold:.2f}` (`{threshold*100:.0f}%`) |",
+            f"| **Bobot Struktural (w_struct)** | `{weight_structural:.2f}` (`{weight_structural*100:.0f}%`) |",
+            f"| **Bobot Subtree Fingerprint (w_fp)** | `{weight_subtree:.2f}` (`{weight_subtree*100:.0f}%`) |",
+            f"| **Rata-rata Kemiripan** | `{avg_sim * 100:.2f}%` |",
+            f"| **Rata-rata Waktu Eksekusi** | `{avg_time:.3f} ms / pasangan` |",
+            f"| **Total Waktu Pengujian** | `{total_time:.2f} ms ({total_time / 1000.0:.2f} s)` |\n",
+            "## 2. Confusion Matrix\n",
+            generate_confusion_matrix_md(metrics),
+            "\n## 3. Metrik Evaluasi Klasifikasi\n",
+            generate_metrics_table_md(metrics),
+            "\n## 4. Breakdown Performa per Kategori Plagiarisme\n",
+            "| Kode Plag | Deskripsi Kategori | Total Pasangan | Rata-rata Kemiripan (%) | Rata-rata Waktu (ms) |",
+            "| :--- | :--- | :---: | :---: | :---: |"
+        ]
+        for k, stats in sorted(breakdown.items()):
+            tot = stats["total"]
+            avg_sim_k = (sum(stats["sims"]) / tot) * 100 if tot > 0 else 0.0
+            avg_t_k = sum(stats["times"]) / tot if tot > 0 else 0.0
+            desc = get_category_desc(k)
+            md_lines.append(f"| `{k}` | {desc} | {tot} | {avg_sim_k:.2f}% | {avg_t_k:.2f} ms |")
+
+        csv_rel_name = os.path.basename(output_result_csv) if output_result_csv else "ast.csv"
+        md_lines.extend([
+            "\n## 5. Berkas Luaran Terkait\n",
+            f"- Berkas CSV Hasil Detail: [`{csv_rel_name}`]({csv_rel_name})\n"
+        ])
+        with open(output_result_md, mode="w", encoding="utf-8") as f:
+            f.write("\n".join(md_lines))
+        print(f"[OK] Laporan Confusion Matrix & Evaluasi disimpan ke: {output_result_md}")
 
     return {
         "engine": "AST",
@@ -222,6 +306,10 @@ if __name__ == "__main__":
                         help=f"Path ke test.csv (default: {DATASET_PATH})")
     parser.add_argument("--output", "-o", type=str, default=OUTPUT_PATH,
                         help=f"Path output file CSV (default: {OUTPUT_PATH})")
+    parser.add_argument("--output-md", "-m", type=str, default=OUTPUT_MD_PATH,
+                        help=f"Path output file Markdown laporan (default: {OUTPUT_MD_PATH})")
+    parser.add_argument("--performance", "-performance", "-p", action="store_true",
+                        help="Mode pengujian performa murni: hanya melakukan cek similaritas tanpa menyimpan hasil (results.append dan ekspor CSV dinonaktifkan)")
 
     args = parser.parse_args()
 
@@ -231,5 +319,7 @@ if __name__ == "__main__":
         weight_structural=args.w_struct,
         weight_subtree=args.w_fp,
         output_result_csv=args.output,
-        kode_plag_filter=args.filter
+        output_result_md=args.output_md,
+        kode_plag_filter=args.filter,
+        performance_mode=args.performance
     )

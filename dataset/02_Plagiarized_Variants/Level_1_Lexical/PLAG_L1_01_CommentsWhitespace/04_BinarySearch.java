@@ -47,7 +47,7 @@ public class BinarySearch {
   }
 
   public int getJumlahLangkah() {
-    return this.jumlahLangkah;
+    return jumlahLangkah;
   }
 
   // Sorting precondition using bubble algorithm
